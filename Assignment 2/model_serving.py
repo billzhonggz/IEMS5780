@@ -23,7 +23,7 @@ def do_predict(model, labels, image):
     :param model: PyTorch torvision model.
     :param labels: dictionary. Prediction labels.
     :param image: image to be predicted.
-    :return string. JSON formatted prediction result.
+    :return List of dictionaries. With top-5 predicted labels and scores.
     """
     # Normalization parameters. Copy from lecture slides.
     normalize = transforms.Normalize(
@@ -49,9 +49,13 @@ def do_predict(model, labels, image):
     for i, score in enumerate(percentage.data.numpy()):
         predictions.append((score, labels[str(i)][1]))
     predictions.sort(reverse=True)
-    # DEBUG: print the prediction scores.
-    for score, label in predictions[:3]:
+    out = []
+    # Top-5 predictions.
+    for score, label in predictions[:5]:
+        # DEBUG: print the prediction scores.
         print('{:16s}: {:.4f}'.format(label, score))
+        out += [{'label': label, 'proba': score}]
+    return out
 
 
 if __name__ == '__main__':
