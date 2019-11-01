@@ -1,21 +1,27 @@
 import base64
 import logging
+import json
+import re
 import time
 import telepot
+import requests
 from telepot.loop import MessageLoop
 from io import BytesIO
 from PIL import Image
 
 
-def send_to_predict(image):
+def send_to_predict(image, chat_id):
     """Send images to the server.
     :param image: PIL.Image object. Incoming image.
+    :param chat_id: Telegram chat ID.
     :return str. List of predictions with probabilities. Sorted in descending order.
     """
     # Encode the image in base64.
     buffered = BytesIO()
     image.save(buffered, format='PNG')
     encoded_image = base64.b64encode(buffered.getvalue())
+    data = {'image': encoded_image, 'chat_id': chat_id}
+    data_send = json.dumps(data)
     # TODO: TCP client: encoded image send to the server. Waiting for receiving predictions.
     predictions = ''
     return predictions
@@ -30,9 +36,35 @@ def handle(msg):
 
     if content_type == "text":
         content = msg["text"]
-        help_info = 'To try out the image classification, please send an image instead.'
-        reply = "You said: {}\n{}".format(content, help_info)
-        bot.sendMessage(chat_id, reply)
+        # Try to access the URL.
+        try:
+            # Find URL as a substring.
+            url = re.search('[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)',
+                            content)
+        except AttributeError:
+            # If the incoming message does not contain a URL.
+            help_info = 'To try out the image classification, please send an image or a image URL instead.'
+            reply = "You said: {}\n{}".format(content, help_info)
+            bot.sendMessage(chat_id, reply)
+            return
+        # Try to download URL.
+        try:
+            image_response = requests.get(url)
+            if image_response.status_code != 200:
+                raise Exception('Response code is not 200 OK.')
+            if 'image' not in image_response.headers['content-type']:
+                raise Exception('The URL does not contains an image.')
+            i = Image.open(BytesIO(image_response.content))
+            # Pass to predicting server.
+            # TODO: change to a queue.
+            predictions = send_to_predict(i, chat_id)
+            # Return predictions to the client.
+            bot.sendMessage(chat_id, predictions)
+        except Exception as e:
+            help_info = 'To try out the image classification, please send an image or a image URL instead.'
+            reply = "You said: {}\n{}\n{}".format(content, help_info, str(e))
+            bot.sendMessage(chat_id, reply)
+            return
 
     # Handle photos.
     if content_type == 'photo':
@@ -45,7 +77,7 @@ def handle(msg):
             bot.sendMessage(chat_id, 'Predicting...')
             # Pass to predicting server.
             # TODO: change to a queue.
-            predictions = send_to_predict(i)
+            predictions = send_to_predict(i, chat_id)
             # Return predictions to the client.
             bot.sendMessage(chat_id, predictions)
         except Exception as e:
