@@ -95,6 +95,7 @@ if __name__ == "__main__":
     # Provide your bot's token
     bot = telepot.Bot("829334217:AAHdT50M-1SejyMNa8Wug2KlDJThvp5Fxwc")
     logging.info('Bot script starting...')
+    # TODO: inspect how `handle()` function run beneath telepot API.
     MessageLoop(bot, handle).run_as_thread()
 
     while True:
