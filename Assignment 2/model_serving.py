@@ -45,15 +45,15 @@ def serve_client(client_socket, address, model, labels):
     """
     logger.info("Serving client from {}".format(address))
     # Terminating string.
-    terminate = '##THEEND##'
+    terminate = '##END##'
     chunks = []
     while True:
-        current_data = client_socket.recv(8192)
+        current_data = client_socket.recv(8192).decode('utf8', 'strict')
         if terminate in current_data:
             chunks.append(current_data[:current_data.find(terminate)])
             break
         chunks.append(current_data)
-        if len(chunks > 1):
+        if len(chunks) > 1:
             last_pair = chunks[-2] + chunks[-1]
             if terminate in last_pair:
                 chunks[-2] = last_pair[:last_pair.find(terminate)]
@@ -63,7 +63,7 @@ def serve_client(client_socket, address, model, labels):
     # JSON decode
     received_data = json.loads(received_data)
     # Base64 decode
-    image_data = base64.decode(received_data['image'])
+    image_data = base64.b64decode(received_data['image'])
     with open('image.png', 'wb') as outfile:
         outfile.write(image_data)
     # Open image.
@@ -73,8 +73,10 @@ def serve_client(client_socket, address, model, labels):
     # Dump predictions to a string with JSON format.
     send_data = {'predictions': predictions, 'chat_id': received_data['chat_id']}
     send_data = json.dumps(send_data)
+    # Add terminating string.
+    send_data += terminate
     # Send back to client.
-    client_socket.sendall(send_data)
+    client_socket.sendall(send_data.encode('utf8'))
     client_socket.close()
     logger.info("Finished")
 
@@ -127,7 +129,7 @@ def do_predict(model, labels, image):
     out = []
     # Top-5 predictions.
     for score, label in predictions[:5]:
-        out += [{'label': label, 'proba': score}]
+        out += [{'label': label, 'proba': str(round(score, 2))}]
     return out
 
 
