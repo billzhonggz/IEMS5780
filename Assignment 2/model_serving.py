@@ -7,17 +7,18 @@ This script is a part of a submission of Assignment 2, IEMS5780, S1 2019-2020, C
 Copyright (c)2019 Junru Zhong.
 """
 
-import torch
+import base64
 import json
-import requests
 import logging
 import socket
+from threading import Thread
+
+import requests
+import torch
 import torchvision.models as models
 import torchvision.transforms as transforms
-
-from torch.autograd import Variable
-from threading import Thread
 from PIL import Image
+from torch.autograd import Variable
 
 
 def get_logger():
@@ -40,13 +41,40 @@ def serve_client(client_socket, address, model, labels):
     :param client_socket: socket. Socket object contains client request.
     :param address: str. Client address.
     :param model: PyTorch model object.
-    :param labels: str in JSON format. Prediction labels.
+    :param labels: JSON object. Prediction labels.
     """
     logger.info("Serving client from {}".format(address))
-    # TODO: Modify to matching terminating pattern rather than fix length.
-    data = client_socket.recv(1024)
-    # TODO: Decode image, send to predict, then get the result.
-    client_socket.sendall(data)
+    # Terminating string.
+    terminate = '##THEEND##'
+    chunks = []
+    while True:
+        current_data = client_socket.recv(8192)
+        if terminate in current_data:
+            chunks.append(current_data[:current_data.find(terminate)])
+            break
+        chunks.append(current_data)
+        if len(chunks > 1):
+            last_pair = chunks[-2] + chunks[-1]
+            if terminate in last_pair:
+                chunks[-2] = last_pair[:last_pair.find(terminate)]
+                chunks.pop()
+                break
+    received_data = ''.join(chunks)
+    # JSON decode
+    received_data = json.loads(received_data)
+    # Base64 decode
+    image_data = base64.decode(received_data['image'])
+    with open('image.png', 'wb') as outfile:
+        outfile.write(image_data)
+    # Open image.
+    image = Image.open('image.png')
+    # Send to predict.
+    predictions = do_predict(model, labels, image)
+    # Dump predictions to a string with JSON format.
+    send_data = {'predictions': predictions, 'chat_id': received_data['chat_id']}
+    send_data = json.dumps(send_data)
+    # Send back to client.
+    client_socket.sendall(send_data)
     client_socket.close()
     logger.info("Finished")
 
@@ -54,7 +82,7 @@ def serve_client(client_socket, address, model, labels):
 def init_model():
     """Download PyTorch model, load to memory.
     :return: PyTorch model object.
-    :return: Labels in JSON format.
+    :return: JSON object. Labels in JSON format.
     """
     # Load model
     model = models.inception_v3(pretrained=True)
