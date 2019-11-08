@@ -31,9 +31,11 @@ class SendToPredict(telepot.helper.ChatHandler):
             self.sender.sendMessage(self._help_info)
 
     def handle_text_msg(self, msg):
+        self.sender.sendMessage('In handle text msg.')
         pass
 
     def handle_photo_msg(self, msg):
+        self.sender.sendMessage('In handle photo msg.')
         pass
 
 

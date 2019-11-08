@@ -1,21 +1,16 @@
 import base64
-import logging
 import json
-import time
-import telepot
-import requests
+import logging
 import socket
-from telepot.loop import MessageLoop
-from threading import Thread
-from queue import Queue
+import time
 from io import BytesIO
+from queue import Queue
+from threading import Thread
+
+import requests
+import telepot
 from PIL import Image
-
-# FIXME: Predict the image from previous image.
-
-# Message queues as global variables.
-image_queue = Queue()
-output_queue = Queue()
+from telepot.loop import MessageLoop
 
 
 def get_logger():
@@ -45,8 +40,7 @@ def send_to_predict(chat_id):
     # Encode the image in base64.
     buffered = BytesIO()
     # Get image from queue.
-    if not image_queue.empty():
-        image = image_queue.get()
+    image = image_queue.get()
     image.save(buffered, format='PNG')
     encoded_image = base64.b64encode(buffered.getvalue())
     data_send = json.dumps(dict({'image': encoded_image.decode('ascii'), 'chat_id': chat_id}))
@@ -102,10 +96,9 @@ def handle(msg):
             image_queue.put(i)
             # Feedback to user.
             bot.sendMessage(chat_id, 'Predicting...')
-            Thread(target=send_to_predict, args=(chat_id,)).start()
+            Thread(target=send_to_predict, args=(chat_id,), daemon=True).start()
             # Get the result.
-            if not output_queue.empty():
-                predictions = output_queue.get()
+            predictions = output_queue.get()
             # Return predictions to the client.
             bot.sendMessage(chat_id, predictions)
         except Exception as e:
@@ -126,10 +119,9 @@ def handle(msg):
             # Feedback to user.
             bot.sendMessage(chat_id, 'Predicting...')
             # Pass to predicting server.
-            Thread(target=send_to_predict, args=(chat_id,)).start()
+            Thread(target=send_to_predict, args=(chat_id,), daemon=True).start()
             # Get the result.
-            if not output_queue.empty():
-                predictions = output_queue.get()
+            predictions = output_queue.get()
             # Return predictions to the client.
             bot.sendMessage(chat_id, predictions)
         except Exception as e:
@@ -139,6 +131,9 @@ def handle(msg):
 
 
 if __name__ == "__main__":
+    # Message queues as global variables.
+    image_queue = Queue()
+    output_queue = Queue()
     logger = get_logger()
     # Provide your bot's token
     bot = telepot.Bot("829334217:AAHdT50M-1SejyMNa8Wug2KlDJThvp5Fxwc")
