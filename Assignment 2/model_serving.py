@@ -150,7 +150,8 @@ if __name__ == '__main__':
     while True:
         (client_socket, address) = server_socket.accept()
         logger.info("Accepted connection from {}".format(address))
-        client_thread = Thread(target=serve_client,
-                               args=(client_socket, address, model, labels),
-                               daemon=True)
-        client_thread.start()
+        # client_thread = Thread(target=serve_client,
+        #                        args=(client_socket, address, model, labels),
+        #                        daemon=True)
+        # client_thread.start()
+        serve_client(client_socket, address, model, labels)

@@ -1,3 +1,12 @@
+"""bot.py
+This script creates three threads to do the following,
+Thread 1 (created by Telepot): Receiving messages from Telegram
+Thread 2: Handle incoming message from queue, send to predict.
+Thread 3 (created by Telepot): Send prediction results back to user.
+
+This script is a part of a submission of Assignment 2, IEMS5780, S1 2019-2020, CUHK.
+Copyright (c)2019 Junru Zhong.
+"""
 import base64
 import json
 import logging
@@ -72,6 +81,15 @@ def send_to_predict(chat_id):
         idx += 1
     # Put to queue.
     output_queue.put(predictions)
+
+
+def send_predictions_back():
+    """Keep polling the output queue, send back the predictions to users."""
+    # Waiting for incoming predictions.
+    while not output_queue.empty():
+        # Send all predictions back.
+        while output_queue.empty():
+            send_back = output_queue.get()
 
 
 def handle(msg):
