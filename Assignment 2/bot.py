@@ -45,6 +45,8 @@ def send_to_predict():
     # Waiting for incoming images.
     while not image_queue.empty():
         # Predict all images in the queue.
+        # Get image from queue.
+        incoming_message = image_queue.get()
         # TCP socket initialize.
         soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         soc.settimeout(5)
@@ -52,8 +54,6 @@ def send_to_predict():
         logger.info('Connected to the server.')
         # Encode the image in base64.
         buffered = BytesIO()
-        # Get image from queue.
-        incoming_message = image_queue.get()
         image = incoming_message['image']
         image.save(buffered, format='PNG')
         encoded_image = base64.b64encode(buffered.getvalue())
@@ -171,8 +171,12 @@ if __name__ == "__main__":
     logger.info('Bot script starting...')
     MessageLoop(bot, handle).run_as_thread()
     # Start threads.
-    Thread(target=send_to_predict, daemon=True).start()
-    Thread(target=send_predictions_back, daemon=True).start()
+    send_to_predict_thread = Thread(target=send_to_predict, daemon=True)
+    send_back_thread = Thread(target=send_predictions_back, daemon=True)
+    send_to_predict_thread.start()
+    send_back_thread.start()
+    send_to_predict_thread.join()
+    send_back_thread.join()
 
     # DEBUG: call prediction function.
 
