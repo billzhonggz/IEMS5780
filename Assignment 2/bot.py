@@ -27,7 +27,7 @@ def get_logger():
     :return logging.Logger.
     """
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     handler = logging.StreamHandler()
     formatter = logging.Formatter(
         "%(asctime)s, %(threadName)s, [%(levelname)s] : %(message)s")
@@ -36,71 +36,74 @@ def get_logger():
     return logger
 
 
-def send_to_predict():
+def send_to_predict(image_queue, output_queue):
     """Send images to the server.
     :param chat_id: Telegram chat ID.
     :return str. List of predictions with probabilities. Sorted in descending order.
     """
     logger.info('Predicting thread started.')
     # Waiting for incoming images.
-    while not image_queue.empty():
-        # Predict all images in the queue.
-        # Get image from queue.
-        incoming_message = image_queue.get()
-        # TCP socket initialize.
-        soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        soc.settimeout(5)
-        soc.connect(('localhost', 8888))
-        logger.info('Connected to the server.')
-        # Encode the image in base64.
-        buffered = BytesIO()
-        image = incoming_message['image']
-        image.save(buffered, format='PNG')
-        encoded_image = base64.b64encode(buffered.getvalue())
-        data_send = json.dumps(dict({'image': encoded_image.decode('ascii'), 'chat_id': incoming_message['chat_id']}))
-        # TCP client: encoded image send to the server. Waiting for receiving predictions.
-        terminate = '##END##'
-        data_send += terminate
-        soc.sendall(str.encode(data_send, 'utf8'))
-        chunks = []
-        while True:
-            current_data = soc.recv(8192).decode('utf8', 'strict')
-            if terminate in current_data:
-                chunks.append(current_data[:current_data.find(terminate)])
-                break
-            chunks.append(current_data)
-            if len(chunks) > 1:
-                last_pair = chunks[-2] + chunks[-1]
-                if terminate in last_pair:
-                    chunks[-2] = last_pair[:last_pair.find(terminate)]
-                    chunks.pop()
+    while True:
+        if not image_queue.empty():
+            # Predict all images in the queue.
+            # Get image from queue.
+            logger.debug('Getting image from queue.')
+            incoming_message = image_queue.get()
+            # TCP socket initialize.
+            soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            soc.settimeout(5)
+            soc.connect(('localhost', 8888))
+            logger.info('Connected to the server.')
+            # Encode the image in base64.
+            buffered = BytesIO()
+            image = incoming_message['image']
+            image.save(buffered, format='PNG')
+            encoded_image = base64.b64encode(buffered.getvalue())
+            data_send = json.dumps(dict({'image': encoded_image.decode('ascii'), 'chat_id': incoming_message['chat_id']}))
+            # TCP client: encoded image send to the server. Waiting for receiving predictions.
+            terminate = '##END##'
+            data_send += terminate
+            soc.sendall(str.encode(data_send, 'utf8'))
+            chunks = []
+            while True:
+                current_data = soc.recv(8192).decode('utf8', 'strict')
+                if terminate in current_data:
+                    chunks.append(current_data[:current_data.find(terminate)])
                     break
-        received_data = ''.join(chunks)
-        # JSON decode.
-        decoded_data = json.loads(received_data)
-        # Format
-        predictions = ''
-        idx = 1
-        for item in decoded_data['predictions']:
-            predictions += '{}. {} ({})\n'.format(idx, item['label'], item['proba'])
-            idx += 1
-        send_back = {
-            'predictions': predictions,
-            'chat_id': incoming_message['chat_id']
-        }
-        # Put to queue.
-        output_queue.put(send_back)
+                chunks.append(current_data)
+                if len(chunks) > 1:
+                    last_pair = chunks[-2] + chunks[-1]
+                    if terminate in last_pair:
+                        chunks[-2] = last_pair[:last_pair.find(terminate)]
+                        chunks.pop()
+                        break
+            received_data = ''.join(chunks)
+            # JSON decode.
+            decoded_data = json.loads(received_data)
+            # Format
+            predictions = ''
+            idx = 1
+            for item in decoded_data['predictions']:
+                predictions += '{}. {} ({})\n'.format(idx, item['label'], item['proba'])
+                idx += 1
+            send_back = {
+                'predictions': predictions,
+                'chat_id': incoming_message['chat_id']
+            }
+            # Put to queue.
+            output_queue.put(send_back)
 
 
-def send_predictions_back():
+def send_predictions_back(output_queue):
     """Keep polling the output queue, send back the predictions to users."""
     # Waiting for incoming predictions.
     logger.info('Send back thread started.')
-    while not output_queue.empty():
-        # Send all predictions back.
-        send_back = output_queue.get()
-        # Send message.
-        bot.sendMessage(send_back['chat_id'], send_back['predictions'])
+    while True:
+        if not output_queue.empty():
+            # Send all predictions back.
+            send_back = output_queue.get()
+            # Send message.
+            bot.sendMessage(send_back['chat_id'], send_back['predictions'])
 
 
 def handle(msg):
@@ -123,6 +126,7 @@ def handle(msg):
             i = Image.open(BytesIO(image_response.content))
             # Pass to predicting server.
             message_to_predict = {'image': i, 'chat_id': chat_id}
+            logger.debug('Putting image to queue.')
             image_queue.put(message_to_predict)
             # Feedback to user.
             # bot.sendMessage(chat_id, 'Predicting...')
@@ -146,6 +150,7 @@ def handle(msg):
             i = Image.open('file.png')
             # Put to the queue.
             message_to_predict = {'image': i, 'chat_id': chat_id}
+            logger.debug('Putting image to queue.')
             image_queue.put(message_to_predict)
             # Feedback to user.
             # bot.sendMessage(chat_id, 'Predicting...')
@@ -162,17 +167,17 @@ def handle(msg):
 
 
 if __name__ == "__main__":
+    logger = get_logger()
     # Message queues as global variables.
     image_queue = Queue()
     output_queue = Queue()
-    logger = get_logger()
     # Provide your bot's token
     bot = telepot.Bot("829334217:AAHdT50M-1SejyMNa8Wug2KlDJThvp5Fxwc")
     logger.info('Bot script starting...')
     MessageLoop(bot, handle).run_as_thread()
     # Start threads.
-    send_to_predict_thread = Thread(target=send_to_predict, daemon=True)
-    send_back_thread = Thread(target=send_predictions_back, daemon=True)
+    send_to_predict_thread = Thread(target=send_to_predict, args=(image_queue, output_queue), daemon=True)
+    send_back_thread = Thread(target=send_predictions_back, args=(output_queue,), daemon=True)
     send_to_predict_thread.start()
     send_back_thread.start()
     send_to_predict_thread.join()

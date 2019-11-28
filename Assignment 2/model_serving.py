@@ -1,7 +1,6 @@
 """model_serving.py
-This script runs an TCP server, receive the incoming request for predicting image classes.
-This script loads the inception V3 model from PyTorch model zoo. 
-This model will be used to do the above prediction.
+Thread 1: TCP server, receive the incoming request for predicting image classes.
+Thread 2: loads the inception V3 model from PyTorch model zoo, and uses it to do the above prediction. Then return the result.
 
 This script is a part of a submission of Assignment 2, IEMS5780, S1 2019-2020, CUHK.
 Copyright (c)2019 Junru Zhong.
@@ -27,7 +26,7 @@ def get_logger():
     :return logging.Logger.
     """
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     handler = logging.StreamHandler()
     formatter = logging.Formatter(
         "%(asctime)s, %(threadName)s, [%(levelname)s] : %(message)s")
@@ -47,6 +46,7 @@ def tcp_server(port, input_queue):
         (client_socket, address) = server_socket.accept()
         logger.info("Accepted connection from {}".format(address))
         input_queue.put((client_socket, address))
+        logger.debug('Current size of input_queue is {}.'.format(input_queue.qsize()))
 
 
 def serve_client(input_queue, model, labels):
@@ -56,44 +56,46 @@ def serve_client(input_queue, model, labels):
     :param labels: JSON object. Prediction labels.
     """
     logger.info('Prediction thread starts...')
-    while not input_queue.empty():
-        (client_socket, address) = input_queue.get()
-        logger.info("Serving client from {}".format(address))
-        # Terminating string.
-        terminate = '##END##'
-        chunks = []
-        while True:
-            current_data = client_socket.recv(8192).decode('utf8', 'strict')
-            if terminate in current_data:
-                chunks.append(current_data[:current_data.find(terminate)])
-                break
-            chunks.append(current_data)
-            if len(chunks) > 1:
-                last_pair = chunks[-2] + chunks[-1]
-                if terminate in last_pair:
-                    chunks[-2] = last_pair[:last_pair.find(terminate)]
-                    chunks.pop()
+    while True:
+        if not input_queue.empty():
+            logger.debug('Current size of input_queue is {}.'.format(input_queue.qsize()))
+            (client_socket, address) = input_queue.get()
+            logger.info("Serving client from {}".format(address))
+            # Terminating string.
+            terminate = '##END##'
+            chunks = []
+            while True:
+                current_data = client_socket.recv(8192).decode('utf8', 'strict')
+                if terminate in current_data:
+                    chunks.append(current_data[:current_data.find(terminate)])
                     break
-        received_data = ''.join(chunks)
-        # JSON decode
-        received_data = json.loads(received_data)
-        # Base64 decode
-        image_data = base64.b64decode(received_data['image'])
-        with open('image.png', 'wb') as outfile:
-            outfile.write(image_data)
-        # Open image.
-        image = Image.open('image.png')
-        # Send to predict.
-        predictions = do_predict(model, labels, image)
-        # Dump predictions to a string with JSON format.
-        send_data = {'predictions': predictions, 'chat_id': received_data['chat_id']}
-        send_data = json.dumps(send_data)
-        # Add terminating string.
-        send_data += terminate
-        # Send back to client.
-        client_socket.sendall(send_data.encode('utf8'))
-        client_socket.close()
-        logger.info("Finished serving {}.".format(address))
+                chunks.append(current_data)
+                if len(chunks) > 1:
+                    last_pair = chunks[-2] + chunks[-1]
+                    if terminate in last_pair:
+                        chunks[-2] = last_pair[:last_pair.find(terminate)]
+                        chunks.pop()
+                        break
+            received_data = ''.join(chunks)
+            # JSON decode
+            received_data = json.loads(received_data)
+            # Base64 decode
+            image_data = base64.b64decode(received_data['image'])
+            with open('image.png', 'wb') as outfile:
+                outfile.write(image_data)
+            # Open image.
+            image = Image.open('image.png')
+            # Send to predict.
+            predictions = do_predict(model, labels, image)
+            # Dump predictions to a string with JSON format.
+            send_data = {'predictions': predictions, 'chat_id': received_data['chat_id']}
+            send_data = json.dumps(send_data)
+            # Add terminating string.
+            send_data += terminate
+            # Send back to client.
+            client_socket.sendall(send_data.encode('utf8'))
+            client_socket.close()
+            logger.info("Finished serving {}.".format(address))
 
 
 def init_model():
