@@ -2,10 +2,11 @@
 This script creates three threads to do the following,
 Thread 1 (created by Telepot): Receiving messages from Telegram
 Thread 2: Handle incoming message from queue, send to predict.
-Thread 3 (created by Telepot): Send prediction results back to user.
+Thread 3: Send prediction results back to user.
 
 This script is a part of a submission of Assignment 2, IEMS5780, S1 2019-2020, CUHK.
 Copyright (c)2019 Junru Zhong.
+Last modified on Nov. 28, 2019
 """
 import base64
 import json
@@ -37,9 +38,10 @@ def get_logger():
 
 
 def send_to_predict(image_queue, output_queue):
-    """Send images to the server.
-    :param chat_id: Telegram chat ID.
-    :return str. List of predictions with probabilities. Sorted in descending order.
+    """Send images in the input queue to the server for prediction.
+    Then receive the result, and put it to output queue.
+    :param image_queue: Queue for incoming images (with chat ID).
+    :param output_queue: Queue for sending prediction result back.
     """
     logger.info('Predicting thread started.')
     # Waiting for incoming images.
@@ -95,7 +97,9 @@ def send_to_predict(image_queue, output_queue):
 
 
 def send_predictions_back(output_queue):
-    """Keep polling the output queue, send back the predictions to users."""
+    """Keep polling the output queue, send back the predictions to users.
+    :param output_queue: Queue variable.
+    """
     # Waiting for incoming predictions.
     logger.info('Send back thread started.')
     while True:
@@ -108,8 +112,8 @@ def send_predictions_back(output_queue):
 
 def handle(msg):
     """
-    A function that will be invoked when a message is
-    recevied by the bot
+    A function that will be invoked when a message is received by the bot.
+    :param msg: Incoming Telegram message.
     """
     content_type, chat_type, chat_id = telepot.glance(msg)
     logging.info('Handling incoming message {}.'.format(chat_id))
@@ -128,13 +132,6 @@ def handle(msg):
             message_to_predict = {'image': i, 'chat_id': chat_id}
             logger.debug('Putting image to queue.')
             image_queue.put(message_to_predict)
-            # Feedback to user.
-            # bot.sendMessage(chat_id, 'Predicting...')
-            # Thread(target=send_to_predict, args=(chat_id,), daemon=True).start()
-            # Get the result.
-            # predictions = output_queue.get()
-            # Return predictions to the client.
-            # bot.sendMessage(chat_id, predictions)
         except Exception as e:
             help_info = 'To try out the image classification, please send an image or a image URL instead.'
             reply = "You said: {}\n{}\n{}".format(content, help_info, str(e))
@@ -152,14 +149,6 @@ def handle(msg):
             message_to_predict = {'image': i, 'chat_id': chat_id}
             logger.debug('Putting image to queue.')
             image_queue.put(message_to_predict)
-            # Feedback to user.
-            # bot.sendMessage(chat_id, 'Predicting...')
-            # Pass to predicting server.
-            # Thread(target=send_to_predict, args=(chat_id,), daemon=True).start()
-            # Get the result.
-            # predictions = output_queue.get()
-            # Return predictions to the client.
-            # bot.sendMessage(chat_id, predictions)
         except Exception as e:
             error_info = 'An exception was caught when handling incoming image: {}'.format(str(e))
             logging.WARNING(error_info)
@@ -182,8 +171,6 @@ if __name__ == "__main__":
     send_back_thread.start()
     send_to_predict_thread.join()
     send_back_thread.join()
-
-    # DEBUG: call prediction function.
 
     while True:
         time.sleep(10)

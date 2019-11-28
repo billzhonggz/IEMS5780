@@ -4,6 +4,7 @@ Thread 2: loads the inception V3 model from PyTorch model zoo, and uses it to do
 
 This script is a part of a submission of Assignment 2, IEMS5780, S1 2019-2020, CUHK.
 Copyright (c)2019 Junru Zhong.
+Last modified on Nov. 28, 2019
 """
 
 import base64
@@ -36,6 +37,10 @@ def get_logger():
 
 
 def tcp_server(port, input_queue):
+    """TCP server to accept connections from clients. Put the incoming message to prediction.
+    :param port: integer. Port number between 0 - 65536. Do verify the port is available.
+    :param input_queue: Queue variable.
+    """
     logger.info("Server thread starts. Listening for connection...")
     # Start TCP server.
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -52,6 +57,7 @@ def tcp_server(port, input_queue):
 def serve_client(input_queue, model, labels):
     """Decodes the message from client, call prediction function. Send back prediction result.
     Adapted from the sample code on course website.
+    :param input_queue: Queue variable.
     :param model: PyTorch model object.
     :param labels: JSON object. Prediction labels.
     """
