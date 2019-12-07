@@ -11,6 +11,7 @@ import json
 import logging
 import re
 import time
+from threading import Thread
 
 import telepot
 from telepot.loop import MessageLoop
@@ -40,19 +41,35 @@ def get_logger():
     return logger
 
 
-def send_predictions_back(output_queue):
-    """Keep polling the output queue, send back the predictions to users.
-    :param output_queue: Queue variable.
+def send_predictions_back():
+    """Keep polling the prediction queue, send back the predictions to users.
     """
-    # TODO: modify to Redis version.
     # Waiting for incoming predictions.
     logger.info('Send back thread started.')
+    queue = StrictRedis(host='localhost', port=6379)
+    pubsub = queue.pubsub()
+    pubsub.subscribe('prediction')
+    logger.info('Subscribed queue \'prediction\'')
+    message = pubsub.get_message()
+    logger.info("Received the first message: {}".format(message))
+    # Loop to consume from queue 'download'.
     while True:
-        if not output_queue.empty():
-            # Send all predictions back.
-            send_back = output_queue.get()
+        logger.info('Waiting message from queue \'download\'...')
+        message = pubsub.get_message()
+        if message:
+            logger.info("Received {}".format(message))
+            msg_data = json.loads(message['data'])
+            # Format
+            send_back = ''
+            idx = 1
+            send_back += 'URL: {}\nPredictions: \n'.format(msg_data['url'])
+            for item in msg_data['predictions']:
+                send_back += '{}. {} ({})\n'.format(idx, item['label'], item['score'])
+                idx += 1
             # Send message.
-            bot.sendMessage(send_back['chat_id'], send_back['predictions'])
+            bot.sendMessage(msg_data['chatId'], send_back)
+        else:
+            time.sleep(1)
 
 
 def handle(msg):
@@ -91,3 +108,9 @@ if __name__ == "__main__":
     bot = telepot.Bot("829334217:AAHdT50M-1SejyMNa8Wug2KlDJThvp5Fxwc")
     logger.info('Bot script starting...')
     MessageLoop(bot, handle).run_as_thread()
+    send_back_thread = Thread(target=send_predictions_back, daemon=True)
+    send_back_thread.start()
+    send_back_thread.join()
+
+    while True:
+        time.sleep(10)
