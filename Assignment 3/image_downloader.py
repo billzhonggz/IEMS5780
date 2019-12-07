@@ -58,7 +58,7 @@ if __name__ == '__main__':
     # Loop to consume from queue 'download'.
     for message in pubsub.listen():
         logger.info("Received {}".format(message))
-        msg_data = message['data']
+        msg_data = json.loads(message['data'])
         # Download
         try:
             # Download and encode.
@@ -83,4 +83,4 @@ if __name__ == '__main__':
                 ]
             }
             # Send the error message to prediction queue as a response message to Telegram user.
-            queue.publish('prediction', send_msg)
+            queue.publish('prediction', json.dumps(send_msg).encode('utf8'))
