@@ -10,6 +10,7 @@ Copyright (c)2019 Junru Zhong.
 import base64
 import json
 import logging
+import time
 
 import requests
 import torch
@@ -99,24 +100,31 @@ if __name__ == '__main__':
     pubsub = queue.pubsub()
     pubsub.subscribe('image')
     logger.info('Subscribed queue \'image\'')
+    message = pubsub.get_message()
+    logger.info("Received the first message: {}".format(message))
     # Loop to consume from queue 'download'.
-    for message in pubsub.listen():
-        logger.info("Received {}".format(message))
-        msg_data = json.loads(message['data'])
-        # Base64 decode.
-        image_data = base64.b64decode(msg_data['image'])
-        # Save to file
-        with open('image.png', 'wb') as outfile:
-            outfile.write(image_data)
-        # Open image.
-        image = Image.open('image.png')
-        # Send to predict.
-        predictions = do_predict(model, labels, image)
-        # Dump predictions to a string with JSON format.
-        send_msg = {
-            'chatId': msg_data['chatId'],
-            'timestamp': msg_data['timestamp'],
-            'url': msg_data['url'],
-            'predictions': predictions
-        }
-        queue.publish('prediction', json.dumps(send_msg).encode('utf8'))
+    while True:
+        logger.info('Waiting message from queue \'image\'...')
+        message = pubsub.get_message()
+        if message:
+            logger.info("Received {}".format(message))
+            msg_data = json.loads(message['data'])
+            # Base64 decode.
+            image_data = base64.b64decode(msg_data['image'])
+            # Save to file
+            with open('image.png', 'wb') as outfile:
+                outfile.write(image_data)
+            # Open image.
+            image = Image.open('image.png')
+            # Send to predict.
+            predictions = do_predict(model, labels, image)
+            # Dump predictions to a string with JSON format.
+            send_msg = {
+                'chatId': msg_data['chatId'],
+                'timestamp': msg_data['timestamp'],
+                'url': msg_data['url'],
+                'predictions': predictions
+            }
+            queue.publish('prediction', json.dumps(send_msg).encode('utf8'))
+        else:
+            time.sleep(1)

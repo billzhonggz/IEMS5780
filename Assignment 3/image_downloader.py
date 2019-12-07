@@ -9,6 +9,7 @@ Copyright (c)2019 Junru Zhong.
 import base64
 import json
 import logging
+import time
 from io import BytesIO
 
 import requests
@@ -55,32 +56,39 @@ if __name__ == '__main__':
     pubsub = queue.pubsub()
     pubsub.subscribe('download')
     logger.info('Subscribed queue \'download\'')
+    message = pubsub.get_message()
+    logger.info("Received the first message: {}".format(message))
     # Loop to consume from queue 'download'.
-    for message in pubsub.listen():
-        logger.info("Received {}".format(message))
-        msg_data = json.loads(message['data'])
-        # Download
-        try:
-            # Download and encode.
-            b64_image = download_encode(msg_data['url'])
-            # Construct new message to send.
-            send_msg = {
-                'chatId': msg_data['chatId'],
-                'timestamp': msg_data['timestamp'],
-                'url': msg_data['url'],
-                'image': b64_image.decode('ascii')
-            }
-            # JSON encode, send to image queue.
-            queue.publish('image', json.dumps(send_msg).encode('utf8'))
-        except Exception as e:
-            logger.warning('{} when download and encoding image.'.format(str(e)))
-            send_msg = {
-                'chatId': msg_data['chatId'],
-                'timestamp': msg_data['timestamp'],
-                'url': msg_data['url'],
-                'predictions': [
-                    {'label': 'An error was encountered: {}'.format(str(e)), 'score': 0}
-                ]
-            }
-            # Send the error message to prediction queue as a response message to Telegram user.
-            queue.publish('prediction', json.dumps(send_msg).encode('utf8'))
+    while True:
+        logger.info('Waiting message from queue \'download\'...')
+        message = pubsub.get_message()
+        if message:
+            logger.info("Received {}".format(message))
+            msg_data = json.loads(message['data'])
+            # Download
+            try:
+                # Download and encode.
+                b64_image = download_encode(msg_data['url'])
+                # Construct new message to send.
+                send_msg = {
+                    'chatId': msg_data['chatId'],
+                    'timestamp': msg_data['timestamp'],
+                    'url': msg_data['url'],
+                    'image': b64_image.decode('ascii')
+                }
+                # JSON encode, send to image queue.
+                queue.publish('image', json.dumps(send_msg).encode('utf8'))
+            except Exception as e:
+                logger.warning('{} when download and encoding image.'.format(str(e)))
+                send_msg = {
+                    'chatId': msg_data['chatId'],
+                    'timestamp': msg_data['timestamp'],
+                    'url': msg_data['url'],
+                    'predictions': [
+                        {'label': 'An error was encountered: {}'.format(str(e)), 'score': 0}
+                    ]
+                }
+                # Send the error message to prediction queue as a response message to Telegram user.
+                queue.publish('prediction', json.dumps(send_msg).encode('utf8'))
+        else:
+            time.sleep(1)
