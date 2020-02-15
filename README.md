@@ -1,10 +1,8 @@
 # Assignments for IEMS5780
 
-**ALL CODE ARE COPYRIGHTED, READ ONLY. ANY REFERENCE SHOULD BE SIGNIFICANTLY CITED.**
+**ALL CODE IS COPYRIGHTED, READ ONLY. ANY REFERENCE SHOULD BE SIGNIFICANTLY CITED.**
 
 **DO NOT COPY THIS CODE TO YOUR OWN ASSIGNMENT!**
-
-**THERE IS ABSOLUTELY NO WARRANTY FOR THIS CODE!!!**
 
 *IEMS5780: Building and Deploying Scalable Machine Learning Services* is a course organized by the tought postgraduate programme of the Department of Information Engineering, The Chinese University of Hong Kong. You can find information of this course at
 
