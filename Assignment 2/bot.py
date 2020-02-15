@@ -161,7 +161,7 @@ if __name__ == "__main__":
     image_queue = Queue()
     output_queue = Queue()
     # Provide your bot's token
-    bot = telepot.Bot("829334217:AAHdT50M-1SejyMNa8Wug2KlDJThvp5Fxwc")
+    bot = telepot.Bot("YOUR API KEY")
     logger.info('Bot script starting...')
     MessageLoop(bot, handle).run_as_thread()
     # Start threads.

@@ -105,7 +105,7 @@ def handle(msg):
 if __name__ == "__main__":
     logger = get_logger()
     # Provide your bot's token
-    bot = telepot.Bot("829334217:AAHdT50M-1SejyMNa8Wug2KlDJThvp5Fxwc")
+    bot = telepot.Bot("YOUR API KEY")
     logger.info('Bot script starting...')
     MessageLoop(bot, handle).run_as_thread()
     send_back_thread = Thread(target=send_predictions_back, daemon=True)

@@ -39,7 +39,7 @@ class SendToPredict(telepot.helper.ChatHandler):
         pass
 
 
-TOKEN = '829334217:AAHdT50M-1SejyMNa8Wug2KlDJThvp5Fxwc'
+TOKEN = 'YOUR API KEY'
 
 bot = telepot.DelegatorBot(TOKEN, [
     pave_event_space()(
